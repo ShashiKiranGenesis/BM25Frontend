@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectorless RAG - PDF Q&A</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <h1>🔍 Vectorless RAG</h1>
+        <p>Multi-document Q&A using BM25 + Reranker + LLM — No vector database needed</p>
+        <div class="arch">Flask Frontend + FastAPI Backend Architecture</div>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Document Management -->
+    <div class="card">
+        <h2>📁 Document Management</h2>
+
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <div class="upload-section">
+                <input type="file" id="file" name="file" accept=".pdf" class="file-input" required>
+                <div style="font-size: 2em; margin-bottom: 10px;">📄</div>
+                <label for="file" class="btn btn-blue">Choose PDF File</label>
+                <p style="margin-top: 12px; color: #7f8c8d; font-size: 13px;" id="fileLabel">
+                    Click to select a PDF document
+                </p>
+                <button type="submit" class="btn btn-green" style="margin-top: 14px;">Upload & Index</button>
+            </div>
+        </form>
+
+        <form action="/refresh" method="post" style="margin-top: 16px;">
+            <button type="submit" class="btn btn-orange">🔄 Refresh Documents</button>
+            <span style="font-size: 12px; color: #999; margin-left: 10px;">
+                Dropped files into uploads/? Click to reload.
+            </span>
+        </form>
+
+        <!-- Status -->
+        {% if is_ready %}
+            <div class="status ready">
+                ✅ Ready — <strong>{{ doc_info.total_documents }}</strong> document(s) loaded,
+                <strong>{{ doc_info.total_chunks }}</strong> total chunks
+            </div>
+
+            {% if doc_info.documents %}
+            <div class="doc-list">
+                <h4>Loaded Documents</h4>
+                <div class="doc-scroll">
+                    {% for filename, info in doc_info.documents.items() %}
+                    <div class="doc-item">
+                        <div style="flex: 1;">
+                            <div class="doc-name">📄 {{ filename }}</div>
+                            <div class="doc-meta">
+                                Author: {{ info.author }} &nbsp;|&nbsp;
+                                Category: {{ info.category }} &nbsp;|&nbsp;
+                                Dept: {{ info.department }} &nbsp;|&nbsp;
+                                Type: {{ info.doc_type }} &nbsp;|&nbsp;
+                                v{{ info.version }} &nbsp;|&nbsp;
+                                Uploaded: {{ info.date_uploaded[:10] }}
+                                {% if info.description %}
+                                <br>{{ info.description }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="doc-badge">{{ info.chunks_count }} chunks</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="status not-ready">
+                ❌ No documents loaded. Upload a PDF or add files to the uploads/ folder.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Q&A Section -->
+    <div class="card">
+        <h2>❓ Ask Questions</h2>
+
+        {% if is_ready %}
+        <!-- Filter Panel -->
+        <div class="filter-panel">
+            <h4>🔎 Filter — Search within specific documents</h4>
+
+            <!-- Quick filter controls -->
+            <div class="filter-controls">
+                <select id="categoryFilter" onchange="applyMetaFilter()">
+                    <option value="">All Categories</option>
+                    {% set categories = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.category not in categories %}
+                            {% set _ = categories.append(info.category) %}
+                            <option value="{{ info.category }}">{{ info.category }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+
+                <select id="departmentFilter" onchange="applyMetaFilter()">
+                    <option value="">All Departments</option>
+                    {% set departments = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.department not in departments %}
+                            {% set _ = departments.append(info.department) %}
+                            <option value="{{ info.department }}">{{ info.department }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+
+                <select id="docTypeFilter" onchange="applyMetaFilter()">
+                    <option value="">All Types</option>
+                    {% set types = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.doc_type not in types %}
+                            {% set _ = types.append(info.doc_type) %}
+                            <option value="{{ info.doc_type }}">{{ info.doc_type }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+
+                <button class="btn btn-blue" onclick="selectAll()" type="button">Select All</button>
+                <button class="btn btn-orange" onclick="clearAll()" type="button">Clear All</button>
+            </div>
+
+            <!-- Per-document checkboxes -->
+            <div class="doc-checkboxes" id="docCheckboxes">
+                {% for filename, info in doc_info.documents.items() %}
+                <div class="doc-pill active"
+                     data-filename="{{ filename }}"
+                     data-category="{{ info.category }}"
+                     data-department="{{ info.department }}"
+                     data-doctype="{{ info.doc_type }}"
+                     onclick="toggleDoc(this)">
+                    <span class="pill-icon">✓</span>
+                    <span>{{ filename | truncate(40, true, '…') }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="filter-summary" id="filterSummary"></div>
+        </div>
+        {% endif %}
+
+        <!-- Question input -->
+        <div class="query-row">
+            <input
+                type="text"
+                id="question"
+                class="query-input"
+                placeholder="Ask a question about the selected documents…"
+                {% if not is_ready %}disabled{% endif %}
+            >
+            <button
+                id="askBtn"
+                class="btn btn-green"
+                {% if not is_ready %}disabled{% endif %}
+            >Ask</button>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="color: #888; font-size: 14px;">Processing your question…</p>
+        </div>
+
+        <!-- Answer -->
+        <div class="answer-section" id="answerSection">
+            <h3 style="margin-bottom: 12px; color: #2c3e50;">💡 Answer</h3>
+            <div class="answer" id="answer"></div>
+
+            <div class="sources">
+                <h4>📚 Source Chunks</h4>
+                <div id="sources"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Initialize app with data from Flask template
+    document.addEventListener('DOMContentLoaded', function() {
+        const backendApi = "{{ backend_api }}";
+        const documentMetadata = {
+            {% if is_ready %}
+            {% for filename, info in doc_info.documents.items() %}
+            {{ filename | tojson }}: {
+                category:   {{ info.category   | tojson }},
+                department: {{ info.department | tojson }},
+                doc_type:   {{ info.doc_type   | tojson }},
+                author:     {{ info.author     | tojson }}
+            },
+            {% endfor %}
+            {% endif %}
+        };
+        
+        initApp(backendApi, documentMetadata);
+    });
+</script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
