@@ -4,6 +4,9 @@ let BACKEND_API = "http://localhost:8000"; // Default, will be overridden by tem
 // Document metadata (will be populated by template)
 let docMeta = {};
 
+// Retrieval mode: 'bm25' | 'hybrid'
+let retrievalMode = 'bm25';
+
 // Initialize the application
 function initApp(backendUrl, documentMetadata) {
     BACKEND_API = backendUrl;
@@ -111,7 +114,31 @@ function updateFilterSummary() {
     }
 }
 
-// Ask question - Main Q&A function
+// Set retrieval mode and update UI
+function setRetrievalMode(mode) {
+    retrievalMode = mode;
+
+    const bm25Btn    = document.getElementById('modeBM25');
+    const hybridBtn  = document.getElementById('modeHybrid');
+    const infoIcon   = document.querySelector('.mode-info-icon');
+    const infoText   = document.getElementById('modeInfoText');
+    const infoBox    = document.getElementById('modeInfo');
+
+    bm25Btn.classList.toggle('active', mode === 'bm25');
+    hybridBtn.classList.toggle('active', mode === 'hybrid');
+
+    if (mode === 'hybrid') {
+        infoIcon.textContent = '🧠';
+        infoText.textContent = 'Hybrid mode: BM25 keyword + ChromaDB semantic search. Results are merged and reranked for best coverage.';
+        infoBox.classList.add('hybrid');
+    } else {
+        infoIcon.textContent = '⚡';
+        infoText.textContent = 'BM25 keyword retrieval — fast, no embeddings needed.';
+        infoBox.classList.remove('hybrid');
+    }
+}
+
+
 async function askQuestion() {
     const questionInput = document.getElementById('question');
     const askBtn = document.getElementById('askBtn');
@@ -136,8 +163,9 @@ async function askQuestion() {
     answerSection.style.display = 'none';
     askBtn.disabled = true;
 
+    const useVector = retrievalMode === 'hybrid';
+
     try {
-        // Call FastAPI backend directly
         const res = await fetch(`${BACKEND_API}/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -145,12 +173,19 @@ async function askQuestion() {
                 question,
                 top_k: 15,
                 rerank_top_n: 5,
-                filter_files: filterFiles
+                filter_files: filterFiles,
+                use_vector: useVector
             })
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Something went wrong');
+
+        // Update answer header to show which mode was used
+        const modeTag = useVector
+            ? '<span class="badge badge-hybrid">🧠 Hybrid BM25 + Vector</span>'
+            : '<span class="badge badge-bm25">⚡ BM25 Only</span>';
+        document.querySelector('.answer-section h3').innerHTML = `💡 Answer &nbsp;${modeTag}`;
 
         // Display answer
         answerDiv.textContent = data.answer;
@@ -161,7 +196,6 @@ async function askQuestion() {
             const docMetadata = chunk.document_metadata || {};
             const metadata = chunk.metadata || {};
 
-            // Resolve filename
             let filename = chunk.source_file;
             if (!filename || filename === 'Unknown') {
                 filename = (chunk.file_path || '').split(/[\\\/]/).pop() || 'Unknown';

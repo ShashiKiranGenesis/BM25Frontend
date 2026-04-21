@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vectorless RAG - PDF Q&A</title>
+    <title>RAG - PDF Q&A</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -11,8 +11,8 @@
 
     <!-- Header -->
     <div class="header">
-        <h1>🔍 Vectorless RAG</h1>
-        <p>Multi-document Q&A using BM25 + Reranker + LLM — No vector database needed</p>
+        <h1>🔍 RAG — PDF Q&A</h1>
+        <p>Multi-document Q&A using BM25 + ChromaDB + Reranker + LLM</p>
         <div class="arch">Flask Frontend + FastAPI Backend Architecture</div>
     </div>
 
@@ -156,6 +156,39 @@
             <div class="filter-summary" id="filterSummary"></div>
         </div>
         {% endif %}
+
+        <!-- Retrieval Mode Toggle -->
+        <div class="retrieval-toggle">
+            <span class="toggle-label">Retrieval Mode</span>
+            <div class="toggle-options">
+                <button
+                    id="modeBM25"
+                    class="mode-btn active"
+                    onclick="setRetrievalMode('bm25')"
+                    title="BM25 keyword retrieval only — fast and always available"
+                    type="button"
+                >
+                    <span class="mode-icon">⚡</span>
+                    <span class="mode-name">BM25 Only</span>
+                    <span class="mode-desc">Keyword retrieval</span>
+                </button>
+                <button
+                    id="modeHybrid"
+                    class="mode-btn"
+                    onclick="setRetrievalMode('hybrid')"
+                    title="BM25 + ChromaDB semantic search — broader recall, slower"
+                    type="button"
+                >
+                    <span class="mode-icon">🧠</span>
+                    <span class="mode-name">Hybrid</span>
+                    <span class="mode-desc">BM25 + Vector</span>
+                </button>
+            </div>
+            <div class="mode-info" id="modeInfo">
+                <span class="mode-info-icon">⚡</span>
+                <span id="modeInfoText">BM25 keyword retrieval — fast, no embeddings needed.</span>
+            </div>
+        </div>
 
         <!-- Question input -->
         <div class="query-row">
