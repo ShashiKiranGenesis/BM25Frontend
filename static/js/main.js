@@ -138,7 +138,7 @@ async function askQuestion() {
 
     try {
         // Call FastAPI backend directly
-        const res = await fetch(`${BACKEND_API}/ask`, {
+        const res = await fetch(`${BACKEND_API}/v1/query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
