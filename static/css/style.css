@@ -366,7 +366,113 @@ body {
     border-left: 4px solid #3498db;
     margin-bottom: 20px;
     line-height: 1.7;
-    white-space: pre-wrap;
+}
+
+/* Markdown rendering styles */
+.answer h1, .answer h2, .answer h3, .answer h4, .answer h5, .answer h6 {
+    margin-top: 16px;
+    margin-bottom: 10px;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.answer h1 { font-size: 1.8em; }
+.answer h2 { font-size: 1.5em; }
+.answer h3 { font-size: 1.3em; }
+.answer h4 { font-size: 1.1em; }
+.answer h5 { font-size: 1em; }
+.answer h6 { font-size: 0.95em; }
+
+.answer p {
+    margin-bottom: 12px;
+}
+
+.answer ul, .answer ol {
+    margin-bottom: 12px;
+    margin-left: 24px;
+}
+
+.answer li {
+    margin-bottom: 6px;
+}
+
+.answer code {
+    background: #e8f4fd;
+    color: #c7254e;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.answer pre {
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.answer pre code {
+    background: none;
+    color: #ecf0f1;
+    padding: 0;
+    font-size: 12px;
+}
+
+.answer blockquote {
+    border-left: 4px solid #bdc3c7;
+    padding-left: 12px;
+    margin-left: 0;
+    margin-bottom: 12px;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.answer table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.answer table th, .answer table td {
+    border: 1px solid #dee2e6;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.answer table th {
+    background: #e8f4fd;
+    color: #2980b9;
+    font-weight: 600;
+}
+
+.answer table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.answer a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.answer a:hover {
+    text-decoration: underline;
+    color: #2980b9;
+}
+
+.answer strong {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.answer em {
+    font-style: italic;
+    color: #555;
 }
 
 /* Source chunks */
@@ -431,4 +537,56 @@ body {
     font-size: 13px; 
     line-height: 1.6; 
     color: #444; 
+}
+
+/* Form Styles */
+.metadata-section h4 {
+    color: #2c3e50;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 6px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group select,
+.form-group textarea {
+    padding: 10px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="date"]:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-group textarea {
+    resize: vertical;
+    font-family: inherit;
 }

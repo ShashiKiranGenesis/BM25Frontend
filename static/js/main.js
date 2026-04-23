@@ -23,6 +23,12 @@ function setupEventListeners() {
         });
     }
 
+    // Upload form submission
+    const uploadForm = document.getElementById('uploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', handleUpload);
+    }
+
     // Question input and ask button
     const questionInput = document.getElementById('question');
     const askBtn = document.getElementById('askBtn');
@@ -38,76 +44,85 @@ function setupEventListeners() {
     }
 }
 
-// Filter logic - Get checked files
-function getCheckedFiles() {
-    return [...document.querySelectorAll('.doc-pill.active')]
-        .map(el => el.dataset.filename);
+// Filter logic - Get metadata filter values
+function getMetadataFilters() {
+    return {
+        category: document.getElementById('categoryFilter')?.value || null,
+        department: document.getElementById('departmentFilter')?.value || null,
+        doc_type: document.getElementById('docTypeFilter')?.value || null,
+        region: document.getElementById('regionFilter')?.value || null
+    };
 }
 
-// Toggle document selection
-function toggleDoc(pill) {
-    pill.classList.toggle('active');
-    pill.querySelector('.pill-icon').textContent =
-        pill.classList.contains('active') ? '✓' : '';
-    updateFilterSummary();
-}
+// Handle file upload with metadata
+async function handleUpload(event) {
+    event.preventDefault();
 
-// Select all documents
-function selectAll() {
-    document.querySelectorAll('.doc-pill').forEach(pill => {
-        pill.classList.add('active');
-        pill.querySelector('.pill-icon').textContent = '✓';
-    });
-    updateFilterSummary();
-}
+    const fileInput = document.getElementById('file');
+    const categorySelect = document.getElementById('category');
+    const departmentSelect = document.getElementById('department');
+    const docTypeSelect = document.getElementById('document_type');
+    const regionSelect = document.getElementById('region');
+    const versionInput = document.getElementById('version');
+    const effectiveDateInput = document.getElementById('effective_date');
+    const descriptionTextarea = document.getElementById('description');
+    const uploadBtn = document.getElementById('uploadBtn');
 
-// Clear all document selections
-function clearAll() {
-    document.querySelectorAll('.doc-pill').forEach(pill => {
-        pill.classList.remove('active');
-        pill.querySelector('.pill-icon').textContent = '';
-    });
-    updateFilterSummary();
-}
+    // Validate required fields
+    if (!fileInput.files[0]) {
+        alert('Please select a PDF file.');
+        return;
+    }
 
-// Apply metadata filters (category, department, doc type)
-function applyMetaFilter() {
-    const cat = document.getElementById('categoryFilter')?.value || '';
-    const dept = document.getElementById('departmentFilter')?.value || '';
-    const type = document.getElementById('docTypeFilter')?.value || '';
+    if (!categorySelect.value || !departmentSelect.value || !docTypeSelect.value || 
+        !regionSelect.value || !versionInput.value || !effectiveDateInput.value) {
+        alert('Please fill in all required metadata fields.');
+        return;
+    }
 
-    document.querySelectorAll('.doc-pill').forEach(pill => {
-        const fn = pill.dataset.filename;
-        const meta = docMeta[fn] || {};
-        const match =
-            (!cat || meta.category === cat) &&
-            (!dept || meta.department === dept) &&
-            (!type || meta.doc_type === type);
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('category', categorySelect.value);
+    formData.append('department', departmentSelect.value);
+    formData.append('document_type', docTypeSelect.value);
+    formData.append('region', regionSelect.value);
+    formData.append('version', versionInput.value);
+    formData.append('effective_date', effectiveDateInput.value);
+    formData.append('description', descriptionTextarea.value);
 
-        if (match) {
-            pill.classList.add('active');
-            pill.querySelector('.pill-icon').textContent = '✓';
-        } else {
-            pill.classList.remove('active');
-            pill.querySelector('.pill-icon').textContent = '';
+    uploadBtn.disabled = true;
+    const originalText = uploadBtn.textContent;
+    uploadBtn.textContent = 'Uploading...';
+
+    try {
+        const res = await fetch(`${BACKEND_API}/v1/documents`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.detail || 'Upload failed');
         }
-    });
-    updateFilterSummary();
-}
 
-// Update filter summary text
-function updateFilterSummary() {
-    const checked = getCheckedFiles();
-    const total = document.querySelectorAll('.doc-pill').length;
-    const el = document.getElementById('filterSummary');
-    if (!el) return;
+        // Show success message
+        alert(`Success! ${data.message}`);
 
-    if (checked.length === 0) {
-        el.innerHTML = '⚠️ No documents selected — please select at least one.';
-    } else if (checked.length === total) {
-        el.innerHTML = 'Searching across <span>all ' + total + ' documents</span>.';
-    } else {
-        el.innerHTML = 'Searching <span>' + checked.length + '</span> of ' + total + ' documents.';
+        // Reset form
+        document.getElementById('uploadForm').reset();
+        document.getElementById('fileLabel').textContent = 'Click to select a PDF document';
+
+        // Redirect to home to refresh document list
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+
+    } catch (err) {
+        alert('Upload error: ' + err.message);
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = originalText;
     }
 }
 
@@ -126,34 +141,43 @@ async function askQuestion() {
         return;
     }
 
-    const filterFiles = getCheckedFiles();
-    if (filterFiles.length === 0) {
-        alert('Please select at least one document to search.');
-        return;
-    }
+    // Get metadata filters
+    const filters = getMetadataFilters();
+
+    // Get query parameters from UI
+    const topK = parseInt(document.getElementById('topK')?.value || '15');
+    const rerankTopN = parseInt(document.getElementById('rerankTopN')?.value || '5');
 
     loading.style.display = 'block';
     answerSection.style.display = 'none';
     askBtn.disabled = true;
 
     try {
+        // Build query body with metadata filters
+        const queryBody = {
+            question,
+            top_k: topK,
+            rerank_top_n: rerankTopN
+        };
+
+        // Add optional metadata filters (only if selected)
+        if (filters.category) queryBody.filter_category = filters.category;
+        if (filters.department) queryBody.filter_department = filters.department;
+        if (filters.doc_type) queryBody.filter_doc_type = filters.doc_type;
+        if (filters.region) queryBody.filter_region = filters.region;
+
         // Call FastAPI backend directly
         const res = await fetch(`${BACKEND_API}/v1/query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                question,
-                top_k: 15,
-                rerank_top_n: 5,
-                filter_files: filterFiles
-            })
+            body: JSON.stringify(queryBody)
         });
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Something went wrong');
 
-        // Display answer
-        answerDiv.textContent = data.answer;
+        // Display answer (render markdown)
+        answerDiv.innerHTML = marked.parse(data.answer);
 
         // Display source chunks
         sourcesDiv.innerHTML = '';

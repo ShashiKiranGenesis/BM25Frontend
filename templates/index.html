@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vectorless RAG - PDF Q&A</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 <div class="container">
@@ -31,7 +32,7 @@
     <div class="card">
         <h2>📁 Document Management</h2>
 
-        <form action="/upload" method="post" enctype="multipart/form-data">
+        <form id="uploadForm" enctype="multipart/form-data">
             <div class="upload-section">
                 <input type="file" id="file" name="file" accept=".pdf" class="file-input" required>
                 <div style="font-size: 2em; margin-bottom: 10px;">📄</div>
@@ -39,8 +40,73 @@
                 <p style="margin-top: 12px; color: #7f8c8d; font-size: 13px;" id="fileLabel">
                     Click to select a PDF document
                 </p>
-                <button type="submit" class="btn btn-green" style="margin-top: 14px;">Upload & Index</button>
             </div>
+
+            <!-- Metadata Fields -->
+            <div class="metadata-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
+                <h4 style="margin-bottom: 15px;">📋 Document Metadata</h4>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="category">Category *</label>
+                        <select id="category" name="category" required>
+                            <option value="">-- Select Category --</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance">Finance</option>
+                            <option value="IT">IT</option>
+                            <option value="Operations">Operations</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="department">Department *</label>
+                        <select id="department" name="department" required>
+                            <option value="">-- Select Department --</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Support">Support</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="document_type">Document Type *</label>
+                        <select id="document_type" name="document_type" required>
+                            <option value="">-- Select Type --</option>
+                            <option value="Policy">Policy</option>
+                            <option value="SOP">SOP</option>
+                            <option value="Runbook">Runbook</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="region">Region *</label>
+                        <select id="region" name="region" required>
+                            <option value="">-- Select Region --</option>
+                            <option value="United States">United States</option>
+                            <option value="European Union">European Union</option>
+                            <option value="Asia-Specific">Asia-Specific</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="version">Version *</label>
+                        <input type="text" id="version" name="version" placeholder="e.g., 1.0" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="effective_date">Effective Date *</label>
+                        <input type="date" id="effective_date" name="effective_date" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description (Optional)</label>
+                    <textarea id="description" name="description" placeholder="Enter document description..." style="resize: vertical; min-height: 80px;"></textarea>
+                </div>
+            </div>
+
+            <button type="submit" id="uploadBtn" class="btn btn-green" style="margin-top: 14px;">Upload & Index</button>
         </form>
 
         <form action="/refresh" method="post" style="margin-top: 16px;">
@@ -97,11 +163,11 @@
         {% if is_ready %}
         <!-- Filter Panel -->
         <div class="filter-panel">
-            <h4>🔎 Filter — Search within specific documents</h4>
+            <h4>🔎 Filter Results — Search by metadata</h4>
 
-            <!-- Quick filter controls -->
+            <!-- Metadata filter controls -->
             <div class="filter-controls">
-                <select id="categoryFilter" onchange="applyMetaFilter()">
+                <select id="categoryFilter">
                     <option value="">All Categories</option>
                     {% set categories = [] %}
                     {% for filename, info in doc_info.documents.items() %}
@@ -112,7 +178,7 @@
                     {% endfor %}
                 </select>
 
-                <select id="departmentFilter" onchange="applyMetaFilter()">
+                <select id="departmentFilter">
                     <option value="">All Departments</option>
                     {% set departments = [] %}
                     {% for filename, info in doc_info.documents.items() %}
@@ -123,7 +189,7 @@
                     {% endfor %}
                 </select>
 
-                <select id="docTypeFilter" onchange="applyMetaFilter()">
+                <select id="docTypeFilter">
                     <option value="">All Types</option>
                     {% set types = [] %}
                     {% for filename, info in doc_info.documents.items() %}
@@ -134,26 +200,17 @@
                     {% endfor %}
                 </select>
 
-                <button class="btn btn-blue" onclick="selectAll()" type="button">Select All</button>
-                <button class="btn btn-orange" onclick="clearAll()" type="button">Clear All</button>
+                <select id="regionFilter">
+                    <option value="">All Regions</option>
+                    {% set regions = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.region not in regions %}
+                            {% set _ = regions.append(info.region) %}
+                            <option value="{{ info.region }}">{{ info.region }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
             </div>
-
-            <!-- Per-document checkboxes -->
-            <div class="doc-checkboxes" id="docCheckboxes">
-                {% for filename, info in doc_info.documents.items() %}
-                <div class="doc-pill active"
-                     data-filename="{{ filename }}"
-                     data-category="{{ info.category }}"
-                     data-department="{{ info.department }}"
-                     data-doctype="{{ info.doc_type }}"
-                     onclick="toggleDoc(this)">
-                    <span class="pill-icon">✓</span>
-                    <span>{{ filename | truncate(40, true, '…') }}</span>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="filter-summary" id="filterSummary"></div>
         </div>
         {% endif %}
 
@@ -171,6 +228,25 @@
                 class="btn btn-green"
                 {% if not is_ready %}disabled{% endif %}
             >Ask</button>
+        </div>
+
+        <!-- Query Parameters -->
+        <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px; display: flex; gap: 20px; align-items: flex-end;">
+            <div style="flex: 0 0 auto;">
+                <label for="topK" style="display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 5px;">
+                    Top-K Results
+                </label>
+                <input type="number" id="topK" min="1" max="100" value="15" style="width: 70px; padding: 6px;">
+            </div>
+            <div style="flex: 0 0 auto;">
+                <label for="rerankTopN" style="display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 5px;">
+                    Rerank Top-N
+                </label>
+                <input type="number" id="rerankTopN" min="1" max="50" value="5" style="width: 70px; padding: 6px;">
+            </div>
+            <div style="font-size: 12px; color: #7f8c8d;">
+                <span style="display: block;">🔧 Adjust retrieval parameters</span>
+            </div>
         </div>
 
         <!-- Loading -->
