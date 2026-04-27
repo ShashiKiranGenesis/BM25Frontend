@@ -143,7 +143,11 @@
                                 {% endif %}
                             </div>
                         </div>
-                        <div class="doc-badge">{{ info.chunks_count }} chunks</div>
+                        <div class="doc-badge-container" style="display: flex; gap: 8px; align-items: center;">
+                            <div class="doc-badge">{{ info.chunks_count }} chunks</div>
+                            <button onclick="openEditModal('{{ info.doc_id }}', '{{ filename }}')" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background-color: #3498db; color: white; border: none; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#2980b9'" onmouseout="this.style.backgroundColor='#3498db'" title="Edit Metadata">🖊️ Edit</button>
+                            <button onclick="deleteDocument('{{ info.doc_id }}', '{{ filename }}')" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background-color: #e74c3c; color: white; border: none; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#c0392b'" onmouseout="this.style.backgroundColor='#e74c3c'" title="Delete Document">🗑️ Delete</button>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -166,50 +170,66 @@
             <h4>🔎 Filter Results — Search by metadata</h4>
 
             <!-- Metadata filter controls -->
-            <div class="filter-controls">
-                <select id="categoryFilter">
-                    <option value="">All Categories</option>
-                    {% set categories = [] %}
-                    {% for filename, info in doc_info.documents.items() %}
-                        {% if info.category not in categories %}
-                            {% set _ = categories.append(info.category) %}
-                            <option value="{{ info.category }}">{{ info.category }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+            <div class="filter-controls" style="display: flex; gap: 20px; flex-wrap: wrap;">
+                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Categories</h5>
+                    <div id="categoryFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
+                        {% set categories = [] %}
+                        {% for filename, info in doc_info.documents.items() %}
+                            {% if info.category not in categories %}
+                                {% set _ = categories.append(info.category) %}
+                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" name="categoryFilter" value="{{ info.category }}"> {{ info.category }}
+                                </label>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
 
-                <select id="departmentFilter">
-                    <option value="">All Departments</option>
-                    {% set departments = [] %}
-                    {% for filename, info in doc_info.documents.items() %}
-                        {% if info.department not in departments %}
-                            {% set _ = departments.append(info.department) %}
-                            <option value="{{ info.department }}">{{ info.department }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Departments</h5>
+                    <div id="departmentFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
+                        {% set departments = [] %}
+                        {% for filename, info in doc_info.documents.items() %}
+                            {% if info.department not in departments %}
+                                {% set _ = departments.append(info.department) %}
+                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" name="departmentFilter" value="{{ info.department }}"> {{ info.department }}
+                                </label>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
 
-                <select id="docTypeFilter">
-                    <option value="">All Types</option>
-                    {% set types = [] %}
-                    {% for filename, info in doc_info.documents.items() %}
-                        {% if info.doc_type not in types %}
-                            {% set _ = types.append(info.doc_type) %}
-                            <option value="{{ info.doc_type }}">{{ info.doc_type }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Document Types</h5>
+                    <div id="docTypeFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
+                        {% set types = [] %}
+                        {% for filename, info in doc_info.documents.items() %}
+                            {% if info.doc_type not in types %}
+                                {% set _ = types.append(info.doc_type) %}
+                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" name="docTypeFilter" value="{{ info.doc_type }}"> {{ info.doc_type }}
+                                </label>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
 
-                <select id="regionFilter">
-                    <option value="">All Regions</option>
-                    {% set regions = [] %}
-                    {% for filename, info in doc_info.documents.items() %}
-                        {% if info.region not in regions %}
-                            {% set _ = regions.append(info.region) %}
-                            <option value="{{ info.region }}">{{ info.region }}</option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
+                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Regions</h5>
+                    <div id="regionFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
+                        {% set regions = [] %}
+                        {% for filename, info in doc_info.documents.items() %}
+                            {% if info.region not in regions %}
+                                {% set _ = regions.append(info.region) %}
+                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" name="regionFilter" value="{{ info.region }}"> {{ info.region }}
+                                </label>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
         </div>
         {% endif %}
@@ -267,6 +287,84 @@
         </div>
     </div>
 
+    <!-- Edit Metadata Modal -->
+    <div id="editModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-content card" style="margin: 5% auto; width: 80%; max-width: 600px; padding: 30px; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0;">🖊️ Edit Metadata</h2>
+                <span class="close" onclick="closeEditModal()" style="font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+            </div>
+            <form id="editForm" style="margin-top: 20px;">
+                <input type="hidden" id="edit_doc_id" name="doc_id">
+                <input type="hidden" id="edit_filename" name="filename">
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit_category">Category</label>
+                        <select id="edit_category" name="category">
+                            <option value="">-- Select Category --</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance">Finance</option>
+                            <option value="IT">IT</option>
+                            <option value="Operations">Operations</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_department">Department</label>
+                        <select id="edit_department" name="department">
+                            <option value="">-- Select Department --</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Support">Support</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_doc_type">Document Type</label>
+                        <select id="edit_doc_type" name="doc_type">
+                            <option value="">-- Select Type --</option>
+                            <option value="Policy">Policy</option>
+                            <option value="SOP">SOP</option>
+                            <option value="Runbook">Runbook</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_region">Region</label>
+                        <select id="edit_region" name="region">
+                            <option value="">-- Select Region --</option>
+                            <option value="United States">United States</option>
+                            <option value="European Union">European Union</option>
+                            <option value="Asia-Specific">Asia-Specific</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_version">Version</label>
+                        <input type="text" id="edit_version" name="version">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit_author">Author</label>
+                        <input type="text" id="edit_author" name="author">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="edit_description">Description</label>
+                    <textarea id="edit_description" name="description" style="resize: vertical; min-height: 80px;"></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="btn" style="background-color: #95a5a6; color: white; padding: 10px 15px;" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-blue" id="saveEditBtn" style="padding: 10px 15px;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -277,10 +375,14 @@
             {% if is_ready %}
             {% for filename, info in doc_info.documents.items() %}
             {{ filename | tojson }}: {
-                category:   {{ info.category   | tojson }},
-                department: {{ info.department | tojson }},
-                doc_type:   {{ info.doc_type   | tojson }},
-                author:     {{ info.author     | tojson }}
+                doc_id:     {{ info.doc_id     | default('') | tojson }},
+                category:   {{ info.category   | default('') | tojson }},
+                department: {{ info.department | default('') | tojson }},
+                doc_type:   {{ info.doc_type   | default('') | tojson }},
+                region:     {{ info.region     | default('') | tojson }},
+                version:    {{ info.version    | default('') | tojson }},
+                description:{{ info.description| default('') | tojson }},
+                author:     {{ info.author     | default('') | tojson }}
             },
             {% endfor %}
             {% endif %}

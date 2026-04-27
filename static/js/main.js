@@ -44,13 +44,20 @@ function setupEventListeners() {
     }
 }
 
+// Helper to get multiple selected values from checkboxes
+function getCheckboxValues(name) {
+    const checkboxes = document.querySelectorAll(`input[name="${name}"]:checked`);
+    const values = Array.from(checkboxes).map(cb => cb.value).filter(val => val !== "");
+    return values.length > 0 ? values : null;
+}
+
 // Filter logic - Get metadata filter values
 function getMetadataFilters() {
     return {
-        category: document.getElementById('categoryFilter')?.value || null,
-        department: document.getElementById('departmentFilter')?.value || null,
-        doc_type: document.getElementById('docTypeFilter')?.value || null,
-        region: document.getElementById('regionFilter')?.value || null
+        category: getCheckboxValues('categoryFilter'),
+        department: getCheckboxValues('departmentFilter'),
+        doc_type: getCheckboxValues('docTypeFilter'),
+        region: getCheckboxValues('regionFilter')
     };
 }
 
@@ -161,10 +168,10 @@ async function askQuestion() {
         };
 
         // Add optional metadata filters (only if selected)
-        if (filters.category) queryBody.filter_category = filters.category;
-        if (filters.department) queryBody.filter_department = filters.department;
-        if (filters.doc_type) queryBody.filter_doc_type = filters.doc_type;
-        if (filters.region) queryBody.filter_region = filters.region;
+        if (filters.category) queryBody.category = filters.category;
+        if (filters.department) queryBody.department = filters.department;
+        if (filters.doc_type) queryBody.doc_type = filters.doc_type;
+        if (filters.region) queryBody.region = filters.region;
 
         // Call FastAPI backend directly
         const res = await fetch(`${BACKEND_API}/v1/query`, {
@@ -223,3 +230,98 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Delete document function
+async function deleteDocument(docId, filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${BACKEND_API}/v1/documents/${docId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await res.json();
+        
+        if (!res.ok) {
+            throw new Error(data.detail || 'Failed to delete document');
+        }
+
+        alert(`Success: ${data.message}`);
+        
+        // Refresh page to show updated document list
+        window.location.reload();
+    } catch (err) {
+        alert('Delete error: ' + err.message);
+    }
+}
+
+// --- Edit Metadata Logic ---
+
+function openEditModal(docId, filename) {
+    const meta = docMeta[filename] || {};
+    document.getElementById('edit_doc_id').value = docId;
+    document.getElementById('edit_filename').value = filename;
+    document.getElementById('edit_category').value = meta.category || '';
+    document.getElementById('edit_department').value = meta.department || '';
+    document.getElementById('edit_doc_type').value = meta.doc_type || '';
+    document.getElementById('edit_region').value = meta.region || '';
+    document.getElementById('edit_version').value = meta.version || '';
+    document.getElementById('edit_author').value = meta.author || '';
+    document.getElementById('edit_description').value = meta.description || '';
+
+    document.getElementById('editModal').style.display = 'block';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+// Attach event listener for editForm
+document.addEventListener('DOMContentLoaded', () => {
+    const editForm = document.getElementById('editForm');
+    if (editForm) {
+        editForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const docId = document.getElementById('edit_doc_id').value;
+            const btn = document.getElementById('saveEditBtn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            const body = {};
+            const cat = document.getElementById('edit_category').value;
+            if (cat) body.category = cat;
+            const dep = document.getElementById('edit_department').value;
+            if (dep) body.department = dep;
+            const dt = document.getElementById('edit_doc_type').value;
+            if (dt) body.doc_type = dt;
+            const reg = document.getElementById('edit_region').value;
+            if (reg) body.region = reg;
+            const ver = document.getElementById('edit_version').value;
+            if (ver) body.version = ver;
+            const auth = document.getElementById('edit_author').value;
+            if (auth) body.author = auth;
+            const desc = document.getElementById('edit_description').value;
+            if (desc) body.description = desc;
+
+            try {
+                const res = await fetch(`${BACKEND_API}/v1/documents/${docId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Edit failed');
+
+                alert('Success: ' + data.message);
+                window.location.reload();
+            } catch (err) {
+                alert('Edit error: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        });
+    }
+});

@@ -59,9 +59,21 @@ def upload_redirect():
     
     try:
         logger.info(f"Uploading file: {file.filename}")
-        # Forward file to backend
+        
+        # Capture metadata from form
+        form_data = {
+            'category': request.form.get('category'),
+            'department': request.form.get('department'),
+            'document_type': request.form.get('document_type'),
+            'region': request.form.get('region'),
+            'version': request.form.get('version'),
+            'effective_date': request.form.get('effective_date'),
+            'description': request.form.get('description', '')
+        }
+        
+        # Forward file and metadata to backend
         files = {'file': (file.filename, file.stream, file.content_type)}
-        response = requests.post(f"{BACKEND_API}/v1/documents", files=files, timeout=30)
+        response = requests.post(f"{BACKEND_API}/v1/documents", files=files, data=form_data, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
