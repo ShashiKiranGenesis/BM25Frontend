@@ -9,7 +9,10 @@ function initApp(backendUrl, documentMetadata) {
     BACKEND_API = backendUrl;
     docMeta = documentMetadata;
     setupEventListeners();
-    updateFilterSummary();
+    
+    // Auto-scroll chat history to bottom on load
+    const chatHistory = document.getElementById('chatHistory');
+    if (chatHistory) chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
 // Setup event listeners
@@ -42,6 +45,17 @@ function setupEventListeners() {
             if (e.key === 'Enter') askQuestion();
         });
     }
+}
+
+// Modal Logic for Upload
+function openUploadModal() {
+    document.getElementById('uploadModal').style.display = 'flex';
+}
+
+function closeUploadModal() {
+    document.getElementById('uploadModal').style.display = 'none';
+    document.getElementById('uploadForm').reset();
+    document.getElementById('fileLabel').textContent = 'Click to select a PDF document';
 }
 
 // Helper to get multiple selected values from checkboxes
@@ -81,9 +95,8 @@ async function handleUpload(event) {
         return;
     }
 
-    if (!categorySelect.value || !departmentSelect.value || !docTypeSelect.value || 
-        !regionSelect.value || !versionInput.value || !effectiveDateInput.value) {
-        alert('Please fill in all required metadata fields.');
+    if (fileInput.files[0].size > 20 * 1024 * 1024) {
+        alert('File size exceeds the 20MB limit.');
         return;
     }
 
@@ -113,17 +126,9 @@ async function handleUpload(event) {
             throw new Error(data.detail || 'Upload failed');
         }
 
-        // Show success message
+        // Show success message and redirect
         alert(`Success! ${data.message}`);
-
-        // Reset form
-        document.getElementById('uploadForm').reset();
-        document.getElementById('fileLabel').textContent = 'Click to select a PDF document';
-
-        // Redirect to home to refresh document list
-        setTimeout(() => {
-            window.location.href = '/';
-        }, 1000);
+        window.location.href = '/';
 
     } catch (err) {
         alert('Upload error: ' + err.message);
@@ -133,20 +138,115 @@ async function handleUpload(event) {
     }
 }
 
+function appendUserMessage(text) {
+    const chatHistory = document.getElementById('chatHistory');
+    const div = document.createElement('div');
+    div.className = 'chat-message user';
+    div.innerHTML = `
+        <div class="avatar">U</div>
+        <div class="message-content">
+            <p>${escapeHtml(text)}</p>
+        </div>
+    `;
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function appendBotTyping() {
+    const chatHistory = document.getElementById('chatHistory');
+    const div = document.createElement('div');
+    div.className = 'chat-message system typing-msg';
+    div.id = 'typingIndicator';
+    div.innerHTML = `
+        <div class="avatar">🤖</div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function removeBotTyping() {
+    const typingMsg = document.getElementById('typingIndicator');
+    if (typingMsg) typingMsg.remove();
+}
+
+function typeBotMessage(markdownText, sourcesHtml = '') {
+    const chatHistory = document.getElementById('chatHistory');
+    const div = document.createElement('div');
+    div.className = 'chat-message system';
+    div.innerHTML = `
+        <div class="avatar">🤖</div>
+        <div class="message-content">
+            <div class="answer-text"></div>
+            <div class="sources-wrapper" style="display: none;">
+                ${sourcesHtml ? `
+                    <div class="sources-container">
+                        <h4>Sources</h4>
+                        ${sourcesHtml}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+
+    const answerTextDiv = div.querySelector('.answer-text');
+    const sourcesWrapper = div.querySelector('.sources-wrapper');
+    
+    let charIndex = 0;
+    // Type out the message 2 characters at a time
+    const typingInterval = setInterval(() => {
+        if (charIndex < markdownText.length) {
+            charIndex += 2;
+            if (charIndex > markdownText.length) charIndex = markdownText.length;
+            
+            // Parse the partial markdown
+            answerTextDiv.innerHTML = marked.parse(markdownText.substring(0, charIndex));
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        } else {
+            clearInterval(typingInterval);
+            if (sourcesHtml) {
+                sourcesWrapper.style.display = 'block';
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+        }
+    }, 15);
+}
+
+function appendBotMessage(answerHtml, sourcesHtml = '') {
+    const chatHistory = document.getElementById('chatHistory');
+    const div = document.createElement('div');
+    div.className = 'chat-message system';
+    div.innerHTML = `
+        <div class="avatar">🤖</div>
+        <div class="message-content">
+            ${answerHtml}
+            ${sourcesHtml ? `
+                <div class="sources-container">
+                    <h4>Sources</h4>
+                    ${sourcesHtml}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    chatHistory.appendChild(div);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
 // Ask question - Main Q&A function
 async function askQuestion() {
     const questionInput = document.getElementById('question');
     const askBtn = document.getElementById('askBtn');
-    const loading = document.getElementById('loading');
-    const answerSection = document.getElementById('answerSection');
-    const answerDiv = document.getElementById('answer');
-    const sourcesDiv = document.getElementById('sources');
 
     const question = questionInput.value.trim();
-    if (!question) {
-        alert('Please enter a question.');
-        return;
-    }
+    if (!question) return;
 
     // Get metadata filters
     const filters = getMetadataFilters();
@@ -155,9 +255,13 @@ async function askQuestion() {
     const topK = parseInt(document.getElementById('topK')?.value || '15');
     const rerankTopN = parseInt(document.getElementById('rerankTopN')?.value || '5');
 
-    loading.style.display = 'block';
-    answerSection.style.display = 'none';
+    // UI Updates
+    appendUserMessage(question);
+    questionInput.value = '';
     askBtn.disabled = true;
+    questionInput.disabled = true;
+    
+    appendBotTyping();
 
     try {
         // Build query body with metadata filters
@@ -181,51 +285,51 @@ async function askQuestion() {
         });
 
         const data = await res.json();
+        removeBotTyping();
+
         if (!res.ok) throw new Error(data.detail || 'Something went wrong');
 
-        // Display answer (render markdown)
-        answerDiv.innerHTML = marked.parse(data.answer);
+        // Render Sources
+        let sourcesHtml = '';
+        if (data.source_chunks && data.source_chunks.length > 0) {
+            data.source_chunks.forEach(chunk => {
+                const docMetadata = chunk.document_metadata || {};
+                
+                let filename = chunk.source_file;
+                if (!filename || filename === 'Unknown') {
+                    filename = (chunk.file_path || '').split(/[\\\/]/).pop() || 'Unknown';
+                }
 
-        // Display source chunks
-        sourcesDiv.innerHTML = '';
-        data.source_chunks.forEach(chunk => {
-            const docMetadata = chunk.document_metadata || {};
-            const metadata = chunk.metadata || {};
+                sourcesHtml += `
+                    <details class="source-chunk">
+                        <summary class="source-meta">
+                            <span class="badge badge-file">${escapeHtml(filename)}</span>
+                            <span class="badge badge-page">Page ${chunk.page}</span>
+                            <span class="badge badge-score">Score ${(chunk.score || 0).toFixed(3)}</span>
+                            <span class="expand-hint">Click to expand</span>
+                        </summary>
+                        <div class="source-content">${escapeHtml(chunk.text)}</div>
+                    </details>
+                `;
+            });
+        }
 
-            // Resolve filename
-            let filename = chunk.source_file;
-            if (!filename || filename === 'Unknown') {
-                filename = (chunk.file_path || '').split(/[\\\/]/).pop() || 'Unknown';
-            }
-
-            const div = document.createElement('div');
-            div.className = 'source-chunk';
-            div.innerHTML = `
-                <div class="source-meta">
-                    <span class="badge badge-file">📄 ${escapeHtml(filename)}</span>
-                    <span class="badge badge-page">Page ${chunk.page}</span>
-                    <span class="badge badge-score">Score ${chunk.score.toFixed(3)}</span>
-                    ${docMetadata.author ? `<span class="badge badge-author">👤 ${escapeHtml(docMetadata.author)}</span>` : ''}
-                    ${docMetadata.category ? `<span class="badge badge-category">🏷 ${escapeHtml(docMetadata.category)}</span>` : ''}
-                    ${metadata.word_count ? `<span class="badge" style="background:#f5f5f5;color:#555">${metadata.word_count} words</span>` : ''}
-                </div>
-                <div class="source-text">${escapeHtml(chunk.text)}</div>
-            `;
-            sourcesDiv.appendChild(div);
-        });
-
-        answerSection.style.display = 'block';
+        // Use the typing effect
+        typeBotMessage(data.answer, sourcesHtml);
 
     } catch (err) {
-        alert('Error: ' + err.message);
+        removeBotTyping();
+        appendBotMessage(`<p style="color: red;">Error: ${err.message}</p>`);
     } finally {
-        loading.style.display = 'none';
         askBtn.disabled = false;
+        questionInput.disabled = false;
+        questionInput.focus();
     }
 }
 
 // Utility function to escape HTML
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -247,10 +351,7 @@ async function deleteDocument(docId, filename) {
         if (!res.ok) {
             throw new Error(data.detail || 'Failed to delete document');
         }
-
-        alert(`Success: ${data.message}`);
         
-        // Refresh page to show updated document list
         window.location.reload();
     } catch (err) {
         alert('Delete error: ' + err.message);
@@ -271,7 +372,7 @@ function openEditModal(docId, filename) {
     document.getElementById('edit_author').value = meta.author || '';
     document.getElementById('edit_description').value = meta.description || '';
 
-    document.getElementById('editModal').style.display = 'block';
+    document.getElementById('editModal').style.display = 'flex';
 }
 
 function closeEditModal() {
@@ -314,7 +415,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Edit failed');
 
-                alert('Success: ' + data.message);
                 window.location.reload();
             } catch (err) {
                 alert('Edit error: ' + err.message);

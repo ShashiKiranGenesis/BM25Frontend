@@ -56,6 +56,15 @@ def upload_redirect():
         logger.warning(f"Upload attempt with non-PDF file: {file.filename}")
         flash('Only PDF files are supported', 'error')
         return redirect(url_for('index'))
+        
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+    
+    if file_size > 20 * 1024 * 1024:
+        logger.warning(f"Upload attempt with file exceeding 20MB limit: {file.filename}")
+        flash('File size exceeds the 20MB limit', 'error')
+        return redirect(url_for('index'))
     
     try:
         logger.info(f"Uploading file: {file.filename}")

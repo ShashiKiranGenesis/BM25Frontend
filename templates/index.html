@@ -3,49 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vectorless RAG - PDF Q&A</title>
+    <title>Knowledge Base</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-<div class="container">
 
-    <!-- Header -->
-    <div class="header">
-        <h1>🔍 Vectorless RAG</h1>
-        <p>Multi-document Q&A using BM25 + Reranker + LLM — No vector database needed</p>
-        <div class="arch">Flask Frontend + FastAPI Backend Architecture</div>
-    </div>
+<div class="app-container">
 
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="flash-messages">
-                {% for category, message in messages %}
-                    <div class="flash {{ category }}">{{ message }}</div>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>📚 Knowledge Base</h1>
+            <p>Smart document assistant</p>
+        </div>
+
+        <div class="sidebar-actions">
+            <button class="btn btn-primary" onclick="openUploadModal()">
+                <span>+</span> Upload Document
+            </button>
+            <form action="/refresh" method="post" style="margin-top: 10px;">
+                <button type="submit" class="btn btn-outline" style="width: 100%;">
+                    🔄 Refresh Index
+                </button>
+            </form>
+        </div>
+
+        <div class="sidebar-section">
+            <h3>Documents Status</h3>
+            {% if is_ready %}
+                <div class="status-badge success">
+                    ✅ Ready ({{ doc_info.total_documents }} docs, {{ doc_info.total_chunks }} chunks)
+                </div>
+            {% else %}
+                <div class="status-badge warning">
+                    ❌ No documents loaded.
+                </div>
+            {% endif %}
+        </div>
+
+        {% if is_ready %}
+        <div class="sidebar-section filter-section">
+            <h3>Filters</h3>
+            <div class="filter-group">
+                <label>Category</label>
+                <div class="filter-options">
+                    {% set categories = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.category not in categories %}
+                            {% set _ = categories.append(info.category) %}
+                            <label class="filter-checkbox">
+                                <input type="checkbox" name="categoryFilter" value="{{ info.category }}">
+                                <span>{{ info.category }}</span>
+                            </label>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Department</label>
+                <div class="filter-options">
+                    {% set departments = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.department not in departments %}
+                            {% set _ = departments.append(info.department) %}
+                            <label class="filter-checkbox">
+                                <input type="checkbox" name="departmentFilter" value="{{ info.department }}">
+                                <span>{{ info.department }}</span>
+                            </label>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Document Type</label>
+                <div class="filter-options">
+                    {% set types = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.doc_type not in types %}
+                            {% set _ = types.append(info.doc_type) %}
+                            <label class="filter-checkbox">
+                                <input type="checkbox" name="docTypeFilter" value="{{ info.doc_type }}">
+                                <span>{{ info.doc_type }}</span>
+                            </label>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <label>Region</label>
+                <div class="filter-options">
+                    {% set regions = [] %}
+                    {% for filename, info in doc_info.documents.items() %}
+                        {% if info.region not in regions %}
+                            {% set _ = regions.append(info.region) %}
+                            <label class="filter-checkbox">
+                                <input type="checkbox" name="regionFilter" value="{{ info.region }}">
+                                <span>{{ info.region }}</span>
+                            </label>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-section doc-list-section">
+            <h3>Loaded Documents</h3>
+            <div class="doc-list">
+                {% for filename, info in doc_info.documents.items() %}
+                <div class="doc-item">
+                    <div class="doc-item-main">
+                        <span class="doc-name">{{ filename }}</span>
+                        <div class="doc-meta-small">
+                            {{ info.category }} • {{ info.department }} • {{ info.chunks_count }} chunks
+                        </div>
+                    </div>
+                    <div class="doc-actions">
+                        <button onclick="openEditModal('{{ info.doc_id }}', '{{ filename }}')" class="btn-icon" title="Edit Metadata">✏️</button>
+                        <button onclick="deleteDocument('{{ info.doc_id }}', '{{ filename }}')" class="btn-icon danger" title="Delete">🗑️</button>
+                    </div>
+                </div>
                 {% endfor %}
             </div>
+        </div>
         {% endif %}
-    {% endwith %}
+    </aside>
 
-    <!-- Document Management -->
-    <div class="card">
-        <h2>📁 Document Management</h2>
+    <!-- Main Chat Area -->
+    <main class="chat-area">
+        <!-- Flash Messages Overlay -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
 
-        <form id="uploadForm" enctype="multipart/form-data">
-            <div class="upload-section">
-                <input type="file" id="file" name="file" accept=".pdf" class="file-input" required>
-                <div style="font-size: 2em; margin-bottom: 10px;">📄</div>
-                <label for="file" class="btn btn-blue">Choose PDF File</label>
-                <p style="margin-top: 12px; color: #7f8c8d; font-size: 13px;" id="fileLabel">
-                    Click to select a PDF document
-                </p>
+        <div class="chat-history" id="chatHistory">
+            <div class="chat-message system">
+                <div class="avatar">🤖</div>
+                <div class="message-content">
+                    <h4>Welcome to the Knowledge Base!</h4>
+                    <p>I can help you answer questions based on the uploaded documents. Upload a PDF from the sidebar, or select filters to narrow down the context.</p>
+                </div>
             </div>
+        </div>
 
-            <!-- Metadata Fields -->
-            <div class="metadata-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
-                <h4 style="margin-bottom: 15px;">📋 Document Metadata</h4>
-                
+        <div class="chat-input-wrapper">
+            <div class="query-params">
+                <div class="param-group">
+                    <label for="topK">Top-K</label>
+                    <input type="number" id="topK" min="1" max="100" value="15">
+                </div>
+                <div class="param-group">
+                    <label for="rerankTopN">Rerank Top-N</label>
+                    <input type="number" id="rerankTopN" min="1" max="50" value="5">
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <input 
+                    type="text" 
+                    id="question" 
+                    placeholder="Ask a question about the documents..." 
+                    {% if not is_ready %}disabled{% endif %}
+                >
+                <button 
+                    id="askBtn" 
+                    class="btn btn-primary"
+                    {% if not is_ready %}disabled{% endif %}
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Upload Document</h2>
+            <button class="close-btn" onclick="closeUploadModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="upload-dropzone">
+                    <input type="file" id="file" name="file" accept=".pdf" class="file-input" required>
+                    <div class="dropzone-icon">📄</div>
+                    <label for="file" class="btn btn-outline">Choose PDF File</label>
+                    <p id="fileLabel">Click to select a PDF document</p>
+                </div>
+
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="category">Category *</label>
@@ -55,6 +212,7 @@
                             <option value="Finance">Finance</option>
                             <option value="IT">IT</option>
                             <option value="Operations">Operations</option>
+                            <option value="Resume">Resume</option>
                         </select>
                     </div>
 
@@ -76,6 +234,7 @@
                             <option value="Policy">Policy</option>
                             <option value="SOP">SOP</option>
                             <option value="Runbook">Runbook</option>
+                            <option value="Resume">Resume</option>
                         </select>
                     </div>
 
@@ -100,201 +259,29 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group full-width">
                     <label for="description">Description (Optional)</label>
-                    <textarea id="description" name="description" placeholder="Enter document description..." style="resize: vertical; min-height: 80px;"></textarea>
-                </div>
-            </div>
-
-            <button type="submit" id="uploadBtn" class="btn btn-green" style="margin-top: 14px;">Upload & Index</button>
-        </form>
-
-        <form action="/refresh" method="post" style="margin-top: 16px;">
-            <button type="submit" class="btn btn-orange">🔄 Refresh Documents</button>
-            <span style="font-size: 12px; color: #999; margin-left: 10px;">
-                Dropped files into uploads/? Click to reload.
-            </span>
-        </form>
-
-        <!-- Status -->
-        {% if is_ready %}
-            <div class="status ready">
-                ✅ Ready — <strong>{{ doc_info.total_documents }}</strong> document(s) loaded,
-                <strong>{{ doc_info.total_chunks }}</strong> total chunks
-            </div>
-
-            {% if doc_info.documents %}
-            <div class="doc-list">
-                <h4>Loaded Documents</h4>
-                <div class="doc-scroll">
-                    {% for filename, info in doc_info.documents.items() %}
-                    <div class="doc-item">
-                        <div style="flex: 1;">
-                            <div class="doc-name">📄 {{ filename }}</div>
-                            <div class="doc-meta">
-                                Author: {{ info.author }} &nbsp;|&nbsp;
-                                Category: {{ info.category }} &nbsp;|&nbsp;
-                                Dept: {{ info.department }} &nbsp;|&nbsp;
-                                Type: {{ info.doc_type }} &nbsp;|&nbsp;
-                                v{{ info.version }} &nbsp;|&nbsp;
-                                Uploaded: {{ info.date_uploaded[:10] }}
-                                {% if info.description %}
-                                <br>{{ info.description }}
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="doc-badge-container" style="display: flex; gap: 8px; align-items: center;">
-                            <div class="doc-badge">{{ info.chunks_count }} chunks</div>
-                            <button onclick="openEditModal('{{ info.doc_id }}', '{{ filename }}')" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background-color: #3498db; color: white; border: none; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#2980b9'" onmouseout="this.style.backgroundColor='#3498db'" title="Edit Metadata">🖊️ Edit</button>
-                            <button onclick="deleteDocument('{{ info.doc_id }}', '{{ filename }}')" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background-color: #e74c3c; color: white; border: none; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#c0392b'" onmouseout="this.style.backgroundColor='#e74c3c'" title="Delete Document">🗑️ Delete</button>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-        {% else %}
-            <div class="status not-ready">
-                ❌ No documents loaded. Upload a PDF or add files to the uploads/ folder.
-            </div>
-        {% endif %}
-    </div>
-
-    <!-- Q&A Section -->
-    <div class="card">
-        <h2>❓ Ask Questions</h2>
-
-        {% if is_ready %}
-        <!-- Filter Panel -->
-        <div class="filter-panel">
-            <h4>🔎 Filter Results — Search by metadata</h4>
-
-            <!-- Metadata filter controls -->
-            <div class="filter-controls" style="display: flex; gap: 20px; flex-wrap: wrap;">
-                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Categories</h5>
-                    <div id="categoryFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
-                        {% set categories = [] %}
-                        {% for filename, info in doc_info.documents.items() %}
-                            {% if info.category not in categories %}
-                                {% set _ = categories.append(info.category) %}
-                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" name="categoryFilter" value="{{ info.category }}"> {{ info.category }}
-                                </label>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
+                    <textarea id="description" name="description" placeholder="Enter document description..."></textarea>
                 </div>
 
-                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Departments</h5>
-                    <div id="departmentFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
-                        {% set departments = [] %}
-                        {% for filename, info in doc_info.documents.items() %}
-                            {% if info.department not in departments %}
-                                {% set _ = departments.append(info.department) %}
-                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" name="departmentFilter" value="{{ info.department }}"> {{ info.department }}
-                                </label>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">Cancel</button>
+                    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload & Index</button>
                 </div>
-
-                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Document Types</h5>
-                    <div id="docTypeFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
-                        {% set types = [] %}
-                        {% for filename, info in doc_info.documents.items() %}
-                            {% if info.doc_type not in types %}
-                                {% set _ = types.append(info.doc_type) %}
-                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" name="docTypeFilter" value="{{ info.doc_type }}"> {{ info.doc_type }}
-                                </label>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="filter-group" style="background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; flex: 1; min-width: 160px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <h5 style="margin: 0 0 10px 0; color: #34495e; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px;">Regions</h5>
-                    <div id="regionFilterGroup" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; font-size: 13px;">
-                        {% set regions = [] %}
-                        {% for filename, info in doc_info.documents.items() %}
-                            {% if info.region not in regions %}
-                                {% set _ = regions.append(info.region) %}
-                                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" name="regionFilter" value="{{ info.region }}"> {{ info.region }}
-                                </label>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Question input -->
-        <div class="query-row">
-            <input
-                type="text"
-                id="question"
-                class="query-input"
-                placeholder="Ask a question about the selected documents…"
-                {% if not is_ready %}disabled{% endif %}
-            >
-            <button
-                id="askBtn"
-                class="btn btn-green"
-                {% if not is_ready %}disabled{% endif %}
-            >Ask</button>
-        </div>
-
-        <!-- Query Parameters -->
-        <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px; display: flex; gap: 20px; align-items: flex-end;">
-            <div style="flex: 0 0 auto;">
-                <label for="topK" style="display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 5px;">
-                    Top-K Results
-                </label>
-                <input type="number" id="topK" min="1" max="100" value="15" style="width: 70px; padding: 6px;">
-            </div>
-            <div style="flex: 0 0 auto;">
-                <label for="rerankTopN" style="display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 5px;">
-                    Rerank Top-N
-                </label>
-                <input type="number" id="rerankTopN" min="1" max="50" value="5" style="width: 70px; padding: 6px;">
-            </div>
-            <div style="font-size: 12px; color: #7f8c8d;">
-                <span style="display: block;">🔧 Adjust retrieval parameters</span>
-            </div>
-        </div>
-
-        <!-- Loading -->
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p style="color: #888; font-size: 14px;">Processing your question…</p>
-        </div>
-
-        <!-- Answer -->
-        <div class="answer-section" id="answerSection">
-            <h3 style="margin-bottom: 12px; color: #2c3e50;">💡 Answer</h3>
-            <div class="answer" id="answer"></div>
-
-            <div class="sources">
-                <h4>📚 Source Chunks</h4>
-                <div id="sources"></div>
-            </div>
+            </form>
         </div>
     </div>
+</div>
 
-    <!-- Edit Metadata Modal -->
-    <div id="editModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
-        <div class="modal-content card" style="margin: 5% auto; width: 80%; max-width: 600px; padding: 30px; position: relative;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0;">🖊️ Edit Metadata</h2>
-                <span class="close" onclick="closeEditModal()" style="font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
-            </div>
-            <form id="editForm" style="margin-top: 20px;">
+<!-- Edit Metadata Modal -->
+<div id="editModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Metadata</h2>
+            <button class="close-btn" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="editForm">
                 <input type="hidden" id="edit_doc_id" name="doc_id">
                 <input type="hidden" id="edit_filename" name="filename">
                 
@@ -307,6 +294,7 @@
                             <option value="Finance">Finance</option>
                             <option value="IT">IT</option>
                             <option value="Operations">Operations</option>
+                            <option value="Resume">Resume</option>
                         </select>
                     </div>
 
@@ -328,6 +316,7 @@
                             <option value="Policy">Policy</option>
                             <option value="SOP">SOP</option>
                             <option value="Runbook">Runbook</option>
+                            <option value="Resume">Resume</option>
                         </select>
                     </div>
 
@@ -352,23 +341,21 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group full-width">
                     <label for="edit_description">Description</label>
-                    <textarea id="edit_description" name="description" style="resize: vertical; min-height: 80px;"></textarea>
+                    <textarea id="edit_description" name="description"></textarea>
                 </div>
 
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                    <button type="button" class="btn" style="background-color: #95a5a6; color: white; padding: 10px 15px;" onclick="closeEditModal()">Cancel</button>
-                    <button type="submit" class="btn btn-blue" id="saveEditBtn" style="padding: 10px 15px;">Save Changes</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" id="saveEditBtn" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>
     </div>
-
 </div>
 
 <script>
-    // Initialize app with data from Flask template
     document.addEventListener('DOMContentLoaded', function() {
         const backendApi = "{{ backend_api }}";
         const documentMetadata = {
